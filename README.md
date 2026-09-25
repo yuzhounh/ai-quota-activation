@@ -2,13 +2,20 @@
   <img src="assets/ai-quota-activation-logo.png" alt="AI Quota Activation logo" width="220">
 </p>
 
-# AI Quota Activation
+<h1 align="center">AI Quota Activation</h1>
 
-> Windows 通用 AI 配额点火与计划唤醒引擎，自动化激活 Codex、Claude、Antigravity 额度窗口与回睡管理。
+<p align="center">
+  <strong>Windows 通用 AI 配额点火与计划唤醒引擎，自动化激活 Codex、Claude、Antigravity 额度窗口与回睡管理</strong>
+</p>
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![Platform](https://img.shields.io/badge/Platform-Windows-lightgrey.svg)]()
-[![PowerShell](https://img.shields.io/badge/PowerShell-%3E%3D%207.4-blue.svg)]()
+<p align="center">
+  <a href="VERSION"><img src="https://img.shields.io/badge/version-v0.4-0969da.svg" alt="Version"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-f59e0b.svg" alt="License"></a>
+  <img src="https://img.shields.io/badge/Platform-Windows-0078D4.svg?logo=windows&logoColor=white" alt="Platform">
+  <img src="https://img.shields.io/badge/PowerShell-%3E%3D%207.4-5391FE.svg?logo=powershell&logoColor=white" alt="PowerShell">
+  <img src="https://img.shields.io/badge/Schedule-5h%20%7C%20Weekly-ff6a00.svg" alt="Schedule Policy">
+</p>
+
 
 AI Quota Activation 是一个专为 Windows 设计的通用 AI 配额点火器。它用一次极简、无工具、无文件修改的 CLI 沙箱请求，启动 Codex、Claude 或 Google Antigravity 的使用窗口，并可通过 Windows 任务计划程序执行 5 小时点火或每周定时点火。
 
