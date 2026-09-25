@@ -93,18 +93,22 @@ pwsh -File .\ai-quota-activate.ps1 `
 
 ## 配置点火策略
 
-默认把三个 AI 全部放入 5 小时组，每天在 `05:00`、`10:03`、`15:06`、`20:09` 本地时间点火；周任务不创建或禁用：
+默认策略符合主流订阅与限额结构：
+- **5 小时点火组**（`Claude, Antigravity`）：每天在 `05:00`、`10:03`、`15:06`、`20:09` 本地时间点火。
+- **仅周点火组**（`Codex`）：每周五 `05:00` 点火一次（适用于只有周限额的 GPT Pro 订阅）。
+
+直接执行即可安装默认策略：
 
 ```powershell
 pwsh -File .\install-ai-quota-schedule.ps1
 ```
 
-如果 Antigravity 所在计划只有周额度，可将 Codex、Claude 放入 5 小时组，把 Antigravity 放入仅周组：
+如需自定义分组，例如仅使用 5 小时点火且无需周点火：
 
 ```powershell
 pwsh -File .\install-ai-quota-schedule.ps1 `
-  -FiveHourAI Codex,Claude `
-  -WeeklyOnlyAI Antigravity
+  -FiveHourAI Claude,Antigravity `
+  -WeeklyOnlyAI ''
 ```
 
 如果三个 AI 都只有周额度或只希望每周点火一次：
@@ -124,10 +128,7 @@ pwsh -File .\install-ai-quota-schedule.ps1 `
 只验证 CLI 和策略而不注册任务：
 
 ```powershell
-pwsh -File .\install-ai-quota-schedule.ps1 `
-  -FiveHourAI Codex,Claude `
-  -WeeklyOnlyAI Antigravity `
-  -CheckOnly
+pwsh -File .\install-ai-quota-schedule.ps1 -CheckOnly
 ```
 
 安装器会先检查所有被分配的 CLI。只有全部存在才会继续要求输入 Windows 账户密码并注册任务。这里必须输入账户密码，不能使用 Windows Hello PIN；密码由 Windows 任务计划程序用于在用户未登录或电脑睡眠时运行任务。
@@ -136,21 +137,18 @@ pwsh -File .\install-ai-quota-schedule.ps1 `
 
 ## 模型选择
 
-默认不指定模型，三个 CLI 都使用各自当前的默认模型。这样 CLI 更新或旧模型停用后，点火任务不会因为硬编码模型名而失效。
+点火引擎默认已内置各 AI 消耗最低的轻量级模型，最大程度节约配额与 token：
+- **Codex**: `gpt-5.6-luna`（ChatGPT 订阅支持的 Luna 轻量模型）
+- **Claude**: `haiku`（`claude-haiku-4-5` 轻量模型）
+- **Antigravity**: `gemini-3.8-flash-low`（Gemini 3.8 Flash 低推理开销模式）
 
-如有特殊需要，仍可在手动点火或安装任务时显式覆盖：
+如有特殊需要，仍可在手动点火或安装任务时显式指定不同模型进行覆盖：
 
 ```powershell
 pwsh -File .\install-ai-quota-schedule.ps1 `
-  -CodexModel gpt-6-luna `
+  -CodexModel gpt-5.6-luna `
   -ClaudeModel haiku `
-  -AntigravityModel '<agy models 显示的模型名>'
-```
-
-不传模型参数即可恢复默认模型：
-
-```powershell
-pwsh -File .\ai-quota-activate.ps1 -DryRun
+  -AntigravityModel gemini-3.8-flash-low
 ```
 
 ## 自定义 CLI 路径

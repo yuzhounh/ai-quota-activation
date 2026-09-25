@@ -98,6 +98,20 @@ try {
     }
 
     $global:AIQuotaTestRegistrations.Clear()
+    & $installer
+    if ($global:AIQuotaTestRegistrations.Count -ne 2) {
+        throw "Expected two scheduled tasks by default, got $($global:AIQuotaTestRegistrations.Count)."
+    }
+    $defaultFiveHour = $global:AIQuotaTestRegistrations | Where-Object TaskName -eq 'AI Quota 5h Activation'
+    $defaultWeekly = $global:AIQuotaTestRegistrations | Where-Object TaskName -eq 'AI Quota Weekly Activation'
+    if ($null -eq $defaultFiveHour -or $defaultFiveHour.Action.Argument -notmatch '-AI "Claude,Antigravity"') {
+        throw 'Default five-hour task must activate Claude,Antigravity.'
+    }
+    if ($null -eq $defaultWeekly -or $defaultWeekly.Action.Argument -notmatch '-AI "Codex"') {
+        throw 'Default weekly task must activate Codex.'
+    }
+
+    $global:AIQuotaTestRegistrations.Clear()
     $global:AIQuotaTestExistingTasks['AI Quota Weekly Activation'] = [pscustomobject]@{
         TaskName = 'AI Quota Weekly Activation'
         State    = 'Ready'

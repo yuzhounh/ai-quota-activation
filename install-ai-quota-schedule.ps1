@@ -1,6 +1,6 @@
 param(
-    [string]$FiveHourAI = 'Codex,Claude,Antigravity',
-    [string]$WeeklyOnlyAI = '',
+    [string]$FiveHourAI = 'Claude,Antigravity',
+    [string]$WeeklyOnlyAI = 'Codex',
     [string[]]$Times = @('05:00', '10:03', '15:06', '20:09'),
     [DayOfWeek]$DayOfWeek = [DayOfWeek]::Friday,
     [string]$WeeklyTime = '05:00',
