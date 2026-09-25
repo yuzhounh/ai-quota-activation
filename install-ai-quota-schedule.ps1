@@ -8,8 +8,8 @@ param(
     [string]$CodexPath,
     [string]$ClaudePath,
     [string]$AntigravityPath,
-    [string]$CodexModel = 'gpt-6-luna',
-    [string]$ClaudeModel = 'haiku',
+    [string]$CodexModel,
+    [string]$ClaudeModel,
     [string]$AntigravityModel,
     [switch]$CheckOnly,
     [switch]$ShowVersion
@@ -182,14 +182,14 @@ function New-ActivationTaskDefinition {
         '-AI', (ConvertTo-TaskArgument ($Providers -join ',')),
         '-LogDirectory', (ConvertTo-TaskArgument $logDirectory),
         '-StateDirectory', (ConvertTo-TaskArgument $stateDirectory),
-        '-TaskName', (ConvertTo-TaskArgument $taskName),
-        '-CodexModel', (ConvertTo-TaskArgument $CodexModel),
-        '-ClaudeModel', (ConvertTo-TaskArgument $ClaudeModel)
+        '-TaskName', (ConvertTo-TaskArgument $taskName)
     )
     foreach ($entry in @(
         @{ Name = '-CodexPath'; Value = $CodexPath },
         @{ Name = '-ClaudePath'; Value = $ClaudePath },
         @{ Name = '-AntigravityPath'; Value = $AntigravityPath },
+        @{ Name = '-CodexModel'; Value = $CodexModel },
+        @{ Name = '-ClaudeModel'; Value = $ClaudeModel },
         @{ Name = '-AntigravityModel'; Value = $AntigravityModel }
     )) {
         if ($entry.Value) {

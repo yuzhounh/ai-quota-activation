@@ -86,11 +86,14 @@ try {
     }
     $fiveHourTask = $global:AIQuotaTestRegistrations | Where-Object TaskName -eq 'AI Quota 5h Activation'
     $weeklyTask = $global:AIQuotaTestRegistrations | Where-Object TaskName -eq 'AI Quota Weekly Activation'
-    if ($null -eq $fiveHourTask -or $fiveHourTask.Triggers.Count -ne 4 -or $fiveHourTask.Action.Argument -notmatch '-AI "Codex,Claude"') {
+    if ($null -eq $fiveHourTask -or $fiveHourTask.Triggers.Count -ne 4 -or
+        $fiveHourTask.Action.Argument -notmatch '-AI "Codex,Claude"' -or
+        $fiveHourTask.Action.Argument -match '-(?:Codex|Claude|Antigravity)Model') {
         throw 'The five-hour task definition is invalid.'
     }
     if ($null -eq $weeklyTask -or $weeklyTask.Triggers.Count -ne 1 -or -not $weeklyTask.Triggers[0].Weekly -or
-        $weeklyTask.Action.Argument -notmatch '-AI "Antigravity"') {
+        $weeklyTask.Action.Argument -notmatch '-AI "Antigravity"' -or
+        $weeklyTask.Action.Argument -match '-(?:Codex|Claude|Antigravity)Model') {
         throw 'The weekly-only task definition is invalid.'
     }
 

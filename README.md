@@ -136,13 +136,9 @@ pwsh -File .\install-ai-quota-schedule.ps1 `
 
 ## 模型选择
 
-默认值：
+默认不指定模型，三个 CLI 都使用各自当前的默认模型。这样 CLI 更新或旧模型停用后，点火任务不会因为硬编码模型名而失效。
 
-- Codex：`gpt-6-luna`
-- Claude：`haiku` 稳定别名
-- Antigravity：不指定模型，使用 CLI 当前默认模型
-
-可以在手动点火或安装任务时覆盖：
+如有特殊需要，仍可在手动点火或安装任务时显式覆盖：
 
 ```powershell
 pwsh -File .\install-ai-quota-schedule.ps1 `
@@ -151,10 +147,10 @@ pwsh -File .\install-ai-quota-schedule.ps1 `
   -AntigravityModel '<agy models 显示的模型名>'
 ```
 
-传入空字符串可让 Codex 或 Claude 也使用各自 CLI 的默认模型：
+不传模型参数即可恢复默认模型：
 
 ```powershell
-pwsh -File .\ai-quota-activate.ps1 -CodexModel '' -ClaudeModel '' -DryRun
+pwsh -File .\ai-quota-activate.ps1 -DryRun
 ```
 
 ## 自定义 CLI 路径
