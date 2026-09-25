@@ -7,6 +7,7 @@ param(
     [string]$ClaudeModel = 'haiku',
     [string]$AntigravityModel,
     [string]$LogDirectory = (Join-Path $PSScriptRoot 'logs'),
+    [string]$StateDirectory = (Join-Path $PSScriptRoot 'state'),
     [string]$TaskName = 'AI Quota Activation',
     [int]$NetworkWaitSeconds = 45,
     [int]$PostWaitSeconds = 20,
@@ -14,10 +15,17 @@ param(
     [int]$RecentWakeMinutes = 5,
     [switch]$CheckOnly,
     [switch]$DryRun,
-    [switch]$NoSleep
+    [switch]$NoSleep,
+    [switch]$ShowVersion
 )
 
 $ErrorActionPreference = 'Stop'
+$scriptVersion = '0.2'
+
+if ($ShowVersion) {
+    Write-Output "AI Quota Activation $scriptVersion"
+    exit 0
+}
 
 if (-not $IsWindows) {
     throw 'This activation engine currently supports Windows only.'
@@ -162,7 +170,7 @@ if ($CheckOnly) {
     exit 0
 }
 
-New-Item -ItemType Directory -Force -Path $LogDirectory | Out-Null
+New-Item -ItemType Directory -Force -Path $LogDirectory, $StateDirectory | Out-Null
 $logPath = Join-Path $LogDirectory ('activation-{0:yyyy-MM-dd}.log' -f (Get-Date))
 
 function Write-Log {
@@ -171,6 +179,145 @@ function Write-Log {
     $line = '{0:yyyy-MM-dd HH:mm:ss}  {1}' -f (Get-Date), $Message
     Add-Content -LiteralPath $logPath -Value $line -Encoding UTF8
     Write-Host $line
+}
+
+function Get-ProviderStatePath {
+    param([Parameter(Mandatory)][string]$Provider)
+
+    return Join-Path $StateDirectory ('{0}-weekly-block.json' -f $Provider.ToLowerInvariant())
+}
+
+function Get-WeeklyBlockState {
+    param([Parameter(Mandatory)][string]$Provider)
+
+    $statePath = Get-ProviderStatePath -Provider $Provider
+    if (-not (Test-Path -LiteralPath $statePath -PathType Leaf)) {
+        return $null
+    }
+
+    try {
+        $state = Get-Content -LiteralPath $statePath -Raw -Encoding UTF8 | ConvertFrom-Json -ErrorAction Stop
+        if ($state.status -ne 'WeeklyQuotaExhausted' -or -not $state.blockedUntil) {
+            throw 'State file does not contain a valid weekly quota block.'
+        }
+        $blockedUntil = [DateTimeOffset]::Parse(
+            [string]$state.blockedUntil,
+            [Globalization.CultureInfo]::InvariantCulture,
+            [Globalization.DateTimeStyles]::RoundtripKind
+        )
+        return [pscustomobject]@{
+            Path         = $statePath
+            BlockedUntil = $blockedUntil
+            DetectedAt   = $state.detectedAt
+        }
+    }
+    catch {
+        Write-Log "Ignoring invalid quota state for ${Provider}: $($_.Exception.Message)"
+        Remove-Item -LiteralPath $statePath -Force -ErrorAction SilentlyContinue
+        return $null
+    }
+}
+
+function Set-WeeklyBlockState {
+    param(
+        [Parameter(Mandatory)][string]$Provider,
+        [Parameter(Mandatory)][DateTimeOffset]$BlockedUntil
+    )
+
+    $statePath = Get-ProviderStatePath -Provider $Provider
+    $state = [ordered]@{
+        version      = 1
+        provider     = $Provider
+        status       = 'WeeklyQuotaExhausted'
+        detectedAt   = [DateTimeOffset]::Now.ToString('o')
+        blockedUntil = $BlockedUntil.ToUniversalTime().ToString('o')
+    }
+    $json = $state | ConvertTo-Json
+    [IO.File]::WriteAllText($statePath, $json, [Text.UTF8Encoding]::new($false))
+}
+
+function Clear-WeeklyBlockState {
+    param([Parameter(Mandatory)][string]$Provider)
+
+    $statePath = Get-ProviderStatePath -Provider $Provider
+    if (Test-Path -LiteralPath $statePath -PathType Leaf) {
+        Remove-Item -LiteralPath $statePath -Force
+    }
+}
+
+function Find-QuotaResetTime {
+    param([Parameter(Mandatory)][string]$Text)
+
+    $isoMatch = [regex]::Match(
+        $Text,
+        '(?<!\d)(?<value>\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?(?:Z|[+-]\d{2}:?\d{2})?)',
+        [Text.RegularExpressions.RegexOptions]::IgnoreCase
+    )
+    if ($isoMatch.Success) {
+        $parsed = [DateTimeOffset]::MinValue
+        if ([DateTimeOffset]::TryParse(
+                $isoMatch.Groups['value'].Value,
+                [Globalization.CultureInfo]::InvariantCulture,
+                [Globalization.DateTimeStyles]::AllowWhiteSpaces,
+                [ref]$parsed
+            )) {
+            return $parsed
+        }
+    }
+
+    $epochMatch = [regex]::Match(
+        $Text,
+        '(?i)["'']?(?:reset_at|reset_time|resets_at)["'']?\s*[:=]\s*["'']?(?<value>\d{10,13})'
+    )
+    if ($epochMatch.Success) {
+        $epoch = [long]$epochMatch.Groups['value'].Value
+        if ($epochMatch.Groups['value'].Value.Length -eq 13) {
+            return [DateTimeOffset]::FromUnixTimeMilliseconds($epoch)
+        }
+        return [DateTimeOffset]::FromUnixTimeSeconds($epoch)
+    }
+
+    $humanMatch = [regex]::Match(
+        $Text,
+        '(?im)\breset(?:s|ting)?(?:\s+at|\s+on|_at|_time)\s*[:=]?\s*(?<value>[^\r\n;}]+)'
+    )
+    if ($humanMatch.Success) {
+        $parsed = [DateTimeOffset]::MinValue
+        if ([DateTimeOffset]::TryParse(
+                $humanMatch.Groups['value'].Value.Trim(),
+                [Globalization.CultureInfo]::CurrentCulture,
+                [Globalization.DateTimeStyles]::AllowWhiteSpaces,
+                [ref]$parsed
+            )) {
+            return $parsed
+        }
+    }
+
+    return $null
+}
+
+function Get-WeeklyQuotaStatus {
+    param(
+        [Parameter(Mandatory)][AllowEmptyCollection()][object[]]$Output,
+        [int]$ExitCode
+    )
+
+    $text = ($Output | ForEach-Object { [string]$_ }) -join "`n"
+    $quotaFailure = $text -match '(?is)\b(quota|usage|rate\s*limit|limit)\b.{0,160}\b(exhausted|exceeded|reached|used\s*up|try\s*again|reset)' -or
+        $text -match '(?is)\b(hit|reached|exceeded)\b.{0,80}\b(quota|usage|rate\s*limit|limit)\b'
+    if (-not $quotaFailure -and $ExitCode -eq 0) {
+        return [pscustomobject]@{ IsWeekly = $false; ResetAt = $null }
+    }
+
+    $resetAt = Find-QuotaResetTime -Text $text
+    $explicitWeekly = $text -match '(?is)\b(weekly|week)\b.{0,120}\b(quota|usage|limit|reset)' -or
+        $text -match '(?is)\b(quota|usage|limit|reset)\b.{0,120}\b(weekly|week)\b'
+    $longCooldown = $null -ne $resetAt -and $resetAt -gt [DateTimeOffset]::Now.AddHours(6)
+
+    return [pscustomobject]@{
+        IsWeekly = $quotaFailure -and ($explicitWeekly -or $longCooldown)
+        ResetAt  = $resetAt
+    }
 }
 
 function Get-ActivationArguments {
@@ -389,12 +536,28 @@ if (-not $NoSleep -and -not $DryRun) {
 Write-Log "Activation started. AI: $($providers -join ', '). Wake attributed to this task: $wokeForThisTask."
 
 try {
-    if (-not $DryRun -and $NetworkWaitSeconds -gt 0) {
+    $providersToRun = @()
+    foreach ($provider in $providers) {
+        if (-not $DryRun) {
+            $weeklyBlock = Get-WeeklyBlockState -Provider $provider
+            if ($null -ne $weeklyBlock) {
+                if ($weeklyBlock.BlockedUntil -gt [DateTimeOffset]::Now) {
+                    Write-Log "$provider weekly quota is exhausted; skipping requests until $($weeklyBlock.BlockedUntil.ToLocalTime().ToString('yyyy-MM-dd HH:mm:ss zzz'))."
+                    continue
+                }
+                Write-Log "$provider weekly quota cooldown has expired; retrying on this scheduled run."
+                Clear-WeeklyBlockState -Provider $provider
+            }
+        }
+        $providersToRun += $provider
+    }
+
+    if ($providersToRun.Count -gt 0 -and -not $DryRun -and $NetworkWaitSeconds -gt 0) {
         Write-Log "Waiting $NetworkWaitSeconds second(s) for network and services."
         Start-Sleep -Seconds $NetworkWaitSeconds
     }
 
-    foreach ($provider in $providers) {
+    foreach ($provider in $providersToRun) {
         $executable = $resolvedExecutables[$provider]
         $arguments = @(Get-ActivationArguments -Provider $provider)
         Write-Log "$provider executable: $executable"
@@ -412,9 +575,25 @@ try {
                 Write-Log ("${provider}: " + [string]$line)
             }
             Write-Log "$provider exit code: $providerExitCode"
+
+            $quotaStatus = Get-WeeklyQuotaStatus -Output @($output) -ExitCode $providerExitCode
+            if ($quotaStatus.IsWeekly) {
+                $scriptExitCode = 1
+                if ($null -ne $quotaStatus.ResetAt -and $quotaStatus.ResetAt -gt [DateTimeOffset]::Now) {
+                    Set-WeeklyBlockState -Provider $provider -BlockedUntil $quotaStatus.ResetAt
+                    Write-Log "WEEKLY QUOTA [$provider]: pausing activation attempts until $($quotaStatus.ResetAt.ToLocalTime().ToString('yyyy-MM-dd HH:mm:ss zzz'))."
+                }
+                else {
+                    Write-Log "WEEKLY QUOTA [$provider]: no usable reset time was returned; the next normal schedule will make one fallback attempt."
+                }
+                Write-Log "WARNING [$provider]: account-level credits or overage settings can turn quota failures into paid usage; disable paid fallback if that is not intended."
+                continue
+            }
+
             if ($providerExitCode -ne 0) {
                 throw "$provider activation request failed with exit code $providerExitCode."
             }
+            Clear-WeeklyBlockState -Provider $provider
         }
         catch {
             $scriptExitCode = 1
@@ -422,7 +601,7 @@ try {
         }
     }
 
-    if (-not $DryRun -and $PostWaitSeconds -gt 0) {
+    if ($providersToRun.Count -gt 0 -and -not $DryRun -and $PostWaitSeconds -gt 0) {
         Start-Sleep -Seconds $PostWaitSeconds
     }
 }

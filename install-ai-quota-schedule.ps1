@@ -1,27 +1,94 @@
 param(
-    [ValidateSet('FiveHour', 'Weekly')]
-    [string]$Cycle = 'FiveHour',
-    [string]$AI = 'Codex,Claude,Antigravity',
+    [string]$FiveHourAI = 'Codex,Claude,Antigravity',
+    [string]$WeeklyOnlyAI = '',
     [string[]]$Times = @('05:00', '10:03', '15:06', '20:09'),
     [DayOfWeek]$DayOfWeek = [DayOfWeek]::Friday,
-    [string]$WeeklyTime = '08:00',
-    [string]$TaskName,
+    [string]$WeeklyTime = '05:00',
+    [string]$TaskNamePrefix = 'AI Quota',
     [string]$CodexPath,
     [string]$ClaudePath,
     [string]$AntigravityPath,
     [string]$CodexModel = 'gpt-6-luna',
     [string]$ClaudeModel = 'haiku',
     [string]$AntigravityModel,
-    [switch]$CheckOnly
+    [switch]$CheckOnly,
+    [switch]$ShowVersion
 )
 
 $ErrorActionPreference = 'Stop'
+$scriptVersion = '0.2'
+$supportedProviders = @('Codex', 'Claude', 'Antigravity')
 
+if ($ShowVersion) {
+    Write-Output "AI Quota Schedule Installer $scriptVersion"
+    exit 0
+}
 if (-not $IsWindows) {
     throw 'This installer currently supports Windows only.'
 }
 if ($PSVersionTable.PSEdition -ne 'Core' -or $PSVersionTable.PSVersion -lt [version]'7.4') {
     throw 'Run this installer with PowerShell 7.4 or later (pwsh.exe).'
+}
+
+function ConvertTo-ProviderList {
+    param(
+        [AllowEmptyString()][string]$Value,
+        [Parameter(Mandatory)][string]$ParameterName
+    )
+
+    if ([string]::IsNullOrWhiteSpace($Value)) {
+        return @()
+    }
+
+    return @(
+        $Value -split '[,;\s]+' |
+            Where-Object { $_ } |
+            ForEach-Object {
+                $candidate = $_.Trim()
+                $match = $supportedProviders | Where-Object {
+                    [string]::Equals($_, $candidate, [StringComparison]::OrdinalIgnoreCase)
+                } | Select-Object -First 1
+                if (-not $match) {
+                    throw "Unsupported AI '$candidate' in -$ParameterName. Supported values: $($supportedProviders -join ', ')."
+                }
+                $match
+            } |
+            Select-Object -Unique
+    )
+}
+
+$fiveHourProviders = @(ConvertTo-ProviderList -Value $FiveHourAI -ParameterName 'FiveHourAI')
+$weeklyProviders = @(ConvertTo-ProviderList -Value $WeeklyOnlyAI -ParameterName 'WeeklyOnlyAI')
+$overlap = @($fiveHourProviders | Where-Object { $weeklyProviders -contains $_ })
+if ($overlap.Count -gt 0) {
+    throw "An AI cannot use both schedules. Remove $($overlap -join ', ') from either -FiveHourAI or -WeeklyOnlyAI."
+}
+$allProviders = @($fiveHourProviders + $weeklyProviders | Select-Object -Unique)
+if ($allProviders.Count -eq 0) {
+    throw 'Assign at least one AI to -FiveHourAI or -WeeklyOnlyAI.'
+}
+
+$parsedTimes = @()
+foreach ($timeText in $Times) {
+    try {
+        $parsedTimes += [datetime]::ParseExact($timeText, 'HH:mm', [Globalization.CultureInfo]::InvariantCulture)
+    }
+    catch {
+        throw "Invalid time '$timeText'. Use 24-hour HH:mm format, for example 05:00."
+    }
+}
+if ($fiveHourProviders.Count -gt 0 -and $parsedTimes.Count -eq 0) {
+    throw 'Five-hour scheduling requires at least one value in -Times.'
+}
+try {
+    $parsedWeeklyTime = [datetime]::ParseExact(
+        $WeeklyTime,
+        'HH:mm',
+        [Globalization.CultureInfo]::InvariantCulture
+    )
+}
+catch {
+    throw "Invalid weekly time '$WeeklyTime'. Use 24-hour HH:mm format, for example 05:00."
 }
 
 $pwshCommand = Get-Command pwsh.exe -CommandType Application -ErrorAction SilentlyContinue |
@@ -37,7 +104,7 @@ if (-not (Test-Path -LiteralPath $sourceScript -PathType Leaf)) {
 }
 
 $checkParameters = @{
-    AI        = $AI
+    AI        = ($allProviders -join ',')
     CheckOnly = $true
 }
 foreach ($entry in @(
@@ -56,52 +123,21 @@ Write-Host 'Checking selected AI CLIs before scheduling...' -ForegroundColor Cya
 if ($LASTEXITCODE -ne 0) {
     exit $LASTEXITCODE
 }
+
+Write-Host 'Quota policy:' -ForegroundColor Cyan
+$policyRows = foreach ($provider in $allProviders) {
+    $policy = if ($fiveHourProviders -contains $provider) { 'Five-hour (weekly task omitted)' } else { 'Weekly only' }
+    [pscustomobject]@{ AI = $provider; Policy = $policy }
+}
+$policyRows | Format-Table -AutoSize
 if ($CheckOnly) {
     exit 0
 }
 
-if (-not $TaskName) {
-    $TaskName = if ($Cycle -eq 'FiveHour') {
-        'AI Quota 5h Activation'
-    }
-    else {
-        'AI Quota Weekly Activation'
-    }
-}
-
-$parsedTimes = @()
-if ($Cycle -eq 'FiveHour') {
-    foreach ($timeText in $Times) {
-        try {
-            $parsedTimes += [datetime]::ParseExact($timeText, 'HH:mm', [Globalization.CultureInfo]::InvariantCulture)
-        }
-        catch {
-            throw "Invalid time '$timeText'. Use 24-hour HH:mm format, for example 05:00."
-        }
-    }
-    if ($parsedTimes.Count -eq 0) {
-        throw 'FiveHour scheduling requires at least one value in -Times.'
-    }
-}
-else {
-    try {
-        $parsedWeeklyTime = [datetime]::ParseExact(
-            $WeeklyTime,
-            'HH:mm',
-            [Globalization.CultureInfo]::InvariantCulture
-        )
-    }
-    catch {
-        throw "Invalid weekly time '$WeeklyTime'. Use 24-hour HH:mm format, for example 08:00."
-    }
-}
-
 $installDirectory = Join-Path $env:LOCALAPPDATA 'AIQuotaActivation'
 $workDirectory = Join-Path $installDirectory 'work'
-$logSubdirectory = if ($Cycle -eq 'FiveHour') { 'logs\five-hour' } else { 'logs\weekly' }
-$logDirectory = Join-Path $installDirectory $logSubdirectory
-New-Item -ItemType Directory -Force -Path $installDirectory, $workDirectory, $logDirectory | Out-Null
-
+$stateDirectory = Join-Path $installDirectory 'state'
+New-Item -ItemType Directory -Force -Path $installDirectory, $workDirectory, $stateDirectory | Out-Null
 $targetScript = Join-Path $installDirectory 'ai-quota-activate.ps1'
 Copy-Item -LiteralPath $sourceScript -Destination $targetScript -Force
 
@@ -111,49 +147,79 @@ function ConvertTo-TaskArgument {
     return '"{0}"' -f $Value.Replace('"', '\"')
 }
 
-$taskArgumentParts = @(
-    '-NoLogo',
-    '-NoProfile',
-    '-NonInteractive',
-    '-ExecutionPolicy', 'Bypass',
-    '-File', (ConvertTo-TaskArgument $targetScript),
-    '-AI', (ConvertTo-TaskArgument $AI),
-    '-LogDirectory', (ConvertTo-TaskArgument $logDirectory),
-    '-TaskName', (ConvertTo-TaskArgument $TaskName),
-    '-CodexModel', (ConvertTo-TaskArgument $CodexModel),
-    '-ClaudeModel', (ConvertTo-TaskArgument $ClaudeModel)
-)
-foreach ($entry in @(
-    @{ Name = '-CodexPath'; Value = $CodexPath },
-    @{ Name = '-ClaudePath'; Value = $ClaudePath },
-    @{ Name = '-AntigravityPath'; Value = $AntigravityPath },
-    @{ Name = '-AntigravityModel'; Value = $AntigravityModel }
-)) {
-    if ($entry.Value) {
-        $taskArgumentParts += $entry.Name
-        $taskArgumentParts += ConvertTo-TaskArgument $entry.Value
+function New-ActivationTaskDefinition {
+    param(
+        [Parameter(Mandatory)][ValidateSet('FiveHour', 'WeeklyOnly')][string]$Policy,
+        [Parameter(Mandatory)][string[]]$Providers
+    )
+
+    if ($Policy -eq 'FiveHour') {
+        $taskName = "$TaskNamePrefix 5h Activation"
+        $logDirectory = Join-Path $installDirectory 'logs\five-hour'
+        $triggers = @($parsedTimes | ForEach-Object { New-ScheduledTaskTrigger -Daily -At $_ })
+        $scheduleSummary = 'Daily at {0}' -f ($Times -join ', ')
+    }
+    else {
+        $taskName = "$TaskNamePrefix Weekly Activation"
+        $logDirectory = Join-Path $installDirectory 'logs\weekly'
+        $triggers = @(
+            New-ScheduledTaskTrigger `
+                -Weekly `
+                -WeeksInterval 1 `
+                -DaysOfWeek $DayOfWeek `
+                -At $parsedWeeklyTime
+        )
+        $scheduleSummary = "Every $DayOfWeek at $WeeklyTime"
+    }
+    New-Item -ItemType Directory -Force -Path $logDirectory | Out-Null
+
+    $taskArgumentParts = @(
+        '-NoLogo',
+        '-NoProfile',
+        '-NonInteractive',
+        '-ExecutionPolicy', 'Bypass',
+        '-File', (ConvertTo-TaskArgument $targetScript),
+        '-AI', (ConvertTo-TaskArgument ($Providers -join ',')),
+        '-LogDirectory', (ConvertTo-TaskArgument $logDirectory),
+        '-StateDirectory', (ConvertTo-TaskArgument $stateDirectory),
+        '-TaskName', (ConvertTo-TaskArgument $taskName),
+        '-CodexModel', (ConvertTo-TaskArgument $CodexModel),
+        '-ClaudeModel', (ConvertTo-TaskArgument $ClaudeModel)
+    )
+    foreach ($entry in @(
+        @{ Name = '-CodexPath'; Value = $CodexPath },
+        @{ Name = '-ClaudePath'; Value = $ClaudePath },
+        @{ Name = '-AntigravityPath'; Value = $AntigravityPath },
+        @{ Name = '-AntigravityModel'; Value = $AntigravityModel }
+    )) {
+        if ($entry.Value) {
+            $taskArgumentParts += $entry.Name
+            $taskArgumentParts += ConvertTo-TaskArgument $entry.Value
+        }
+    }
+
+    $action = New-ScheduledTaskAction `
+        -Execute $powerShellPath `
+        -Argument ($taskArgumentParts -join ' ') `
+        -WorkingDirectory $workDirectory
+
+    return [pscustomobject]@{
+        Policy          = $Policy
+        Providers       = $Providers
+        TaskName        = $taskName
+        LogDirectory    = $logDirectory
+        Triggers        = $triggers
+        Action          = $action
+        ScheduleSummary = $scheduleSummary
     }
 }
-$taskArguments = $taskArgumentParts -join ' '
 
-$action = New-ScheduledTaskAction `
-    -Execute $powerShellPath `
-    -Argument $taskArguments `
-    -WorkingDirectory $workDirectory
-
-if ($Cycle -eq 'FiveHour') {
-    $triggers = @($parsedTimes | ForEach-Object { New-ScheduledTaskTrigger -Daily -At $_ })
-    $scheduleSummary = 'Daily at {0}' -f ($Times -join ', ')
+$taskDefinitions = @()
+if ($fiveHourProviders.Count -gt 0) {
+    $taskDefinitions += New-ActivationTaskDefinition -Policy FiveHour -Providers $fiveHourProviders
 }
-else {
-    $triggers = @(
-        New-ScheduledTaskTrigger `
-            -Weekly `
-            -WeeksInterval 1 `
-            -DaysOfWeek $DayOfWeek `
-            -At $parsedWeeklyTime
-    )
-    $scheduleSummary = "Every $DayOfWeek at $WeeklyTime"
+if ($weeklyProviders.Count -gt 0) {
+    $taskDefinitions += New-ActivationTaskDefinition -Policy WeeklyOnly -Providers $weeklyProviders
 }
 
 $settings = New-ScheduledTaskSettingsSet `
@@ -165,12 +231,11 @@ $settings = New-ScheduledTaskSettingsSet `
     -ExecutionTimeLimit (New-TimeSpan -Minutes 15)
 
 $user = [System.Security.Principal.WindowsIdentity]::GetCurrent().Name
-$description = "Wake if needed and send a minimal request to $AI for $Cycle quota activation. Return to sleep only when this task woke the PC and the user remains idle."
-
 Write-Host ''
-Write-Host "Registering '$TaskName' for user: $user"
-Write-Host "AI: $AI" -ForegroundColor Cyan
-Write-Host "Schedule: $scheduleSummary (local time)" -ForegroundColor Cyan
+Write-Host "Registering $($taskDefinitions.Count) activation task(s) for user: $user"
+foreach ($definition in $taskDefinitions) {
+    Write-Host "$($definition.TaskName): $($definition.Providers -join ', ') — $($definition.ScheduleSummary)" -ForegroundColor Cyan
+}
 Write-Host 'Windows needs the account password, not the Windows Hello PIN.' -ForegroundColor Yellow
 $securePassword = Read-Host 'Enter Windows account password' -AsSecureString
 
@@ -180,15 +245,18 @@ try {
     $passwordPointer = [Runtime.InteropServices.Marshal]::SecureStringToBSTR($securePassword)
     $plainPassword = [Runtime.InteropServices.Marshal]::PtrToStringBSTR($passwordPointer)
 
-    Register-ScheduledTask `
-        -TaskName $TaskName `
-        -Action $action `
-        -Trigger $triggers `
-        -Settings $settings `
-        -Description $description `
-        -User $user `
-        -Password $plainPassword `
-        -Force | Out-Null
+    foreach ($definition in $taskDefinitions) {
+        $description = "Send a minimal request to $($definition.Providers -join ', ') using the $($definition.Policy) quota policy, with weekly quota cooldown awareness."
+        Register-ScheduledTask `
+            -TaskName $definition.TaskName `
+            -Action $definition.Action `
+            -Trigger $definition.Triggers `
+            -Settings $settings `
+            -Description $description `
+            -User $user `
+            -Password $plainPassword `
+            -Force | Out-Null
+    }
 }
 finally {
     if ($passwordPointer -ne [IntPtr]::Zero) {
@@ -198,18 +266,30 @@ finally {
     $securePassword = $null
 }
 
+foreach ($inactiveTaskName in @(
+    if ($fiveHourProviders.Count -eq 0) { "$TaskNamePrefix 5h Activation" }
+    if ($weeklyProviders.Count -eq 0) { "$TaskNamePrefix Weekly Activation" }
+)) {
+    $inactiveTask = Get-ScheduledTask -TaskName $inactiveTaskName -ErrorAction SilentlyContinue
+    if ($null -ne $inactiveTask -and $inactiveTask.State -ne 'Disabled') {
+        Disable-ScheduledTask -InputObject $inactiveTask | Out-Null
+        Write-Host "Disabled task excluded by the current quota policy: $inactiveTaskName" -ForegroundColor Yellow
+    }
+}
+
 Write-Host ''
-Write-Host "Created or updated: $TaskName" -ForegroundColor Green
-Write-Host "Schedule: $scheduleSummary" -ForegroundColor Green
-Write-Host ''
-Write-Host 'Next run:' -ForegroundColor Cyan
-Get-ScheduledTaskInfo -TaskName $TaskName |
-    Select-Object LastRunTime, NextRunTime, LastTaskResult |
-    Format-List
+foreach ($definition in $taskDefinitions) {
+    Write-Host "Created or updated: $($definition.TaskName)" -ForegroundColor Green
+    Write-Host "AI: $($definition.Providers -join ', ')"
+    Write-Host "Schedule: $($definition.ScheduleSummary)"
+    Get-ScheduledTaskInfo -TaskName $definition.TaskName |
+        Select-Object LastRunTime, NextRunTime, LastTaskResult |
+        Format-List
+}
 
 Write-Host 'Wake timers:' -ForegroundColor Cyan
 powercfg /waketimers
-
 Write-Host ''
 Write-Host "Installed engine: $targetScript"
-Write-Host "Logs: $logDirectory"
+Write-Host "Logs: $(Join-Path $installDirectory 'logs')"
+Write-Host "Quota state: $stateDirectory"
