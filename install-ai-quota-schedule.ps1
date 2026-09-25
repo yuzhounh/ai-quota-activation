@@ -3,7 +3,7 @@ param(
     [string]$WeeklyOnlyAI = 'Codex',
     [string[]]$Times = @('05:00', '10:03', '15:06', '20:09'),
     [DayOfWeek]$DayOfWeek = [DayOfWeek]::Friday,
-    [string]$WeeklyTime = '05:00',
+    [string]$WeeklyTime = '08:08',
     [string]$TaskNamePrefix = 'AI Quota',
     [string]$CodexPath,
     [string]$ClaudePath,
@@ -80,15 +80,41 @@ foreach ($timeText in $Times) {
 if ($fiveHourProviders.Count -gt 0 -and $parsedTimes.Count -eq 0) {
     throw 'Five-hour scheduling requires at least one value in -Times.'
 }
-try {
-    $parsedWeeklyTime = [datetime]::ParseExact(
-        $WeeklyTime,
-        'HH:mm',
-        [Globalization.CultureInfo]::InvariantCulture
-    )
+$weeklyFormats = @(
+    'yyyy-MM-dd HH:mm',
+    'yyyy-MM-dd HH:mm:ss',
+    'yyyy-MM-ddTHH:mm:ss',
+    'yyyy-MM-ddTHH:mm',
+    'HH:mm',
+    'H:mm'
+)
+$parsedWeeklyTime = [datetime]::MinValue
+$matchedWeeklyFormat = $null
+foreach ($formatCandidate in $weeklyFormats) {
+    if ([datetime]::TryParseExact(
+            $WeeklyTime,
+            $formatCandidate,
+            [Globalization.CultureInfo]::InvariantCulture,
+            [Globalization.DateTimeStyles]::None,
+            [ref]$parsedWeeklyTime
+        )) {
+        $matchedWeeklyFormat = $formatCandidate
+        break
+    }
 }
-catch {
-    throw "Invalid weekly time '$WeeklyTime'. Use 24-hour HH:mm format, for example 05:00."
+if ($null -eq $matchedWeeklyFormat) {
+    throw "Invalid weekly time '$WeeklyTime'. Use 'HH:mm' (e.g. 08:08) or 'yyyy-MM-dd HH:mm' (e.g. 2026-10-02 08:08)."
+}
+
+if ($matchedWeeklyFormat -like 'yyyy*') {
+    $DayOfWeek = $parsedWeeklyTime.DayOfWeek
+}
+else {
+    $targetDate = [datetime]::Today
+    while ($targetDate.DayOfWeek -ne $DayOfWeek -or $targetDate.Add($parsedWeeklyTime.TimeOfDay) -le [datetime]::Now) {
+        $targetDate = $targetDate.AddDays(1)
+    }
+    $parsedWeeklyTime = $targetDate.Add($parsedWeeklyTime.TimeOfDay)
 }
 
 $pwshCommand = Get-Command pwsh.exe -CommandType Application -ErrorAction SilentlyContinue |
@@ -169,7 +195,7 @@ function New-ActivationTaskDefinition {
                 -DaysOfWeek $DayOfWeek `
                 -At $parsedWeeklyTime
         )
-        $scheduleSummary = "Every $DayOfWeek at $WeeklyTime"
+        $scheduleSummary = "Every $DayOfWeek at {0:HH:mm} (starts {1:yyyy-MM-dd})" -f $parsedWeeklyTime, $parsedWeeklyTime
     }
     New-Item -ItemType Directory -Force -Path $logDirectory | Out-Null
 
