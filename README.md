@@ -1,4 +1,4 @@
-# AI Quota Activation v0.2
+# AI Quota Activation v0.3
 
 这是一个 Windows 通用 AI 配额点火器。它用一次极简、无工具、无文件修改的 CLI 请求，启动 Codex、Claude 或 Antigravity 的使用窗口，并可通过 Windows 任务计划程序执行 5 小时点火或每周点火。
 
@@ -10,7 +10,7 @@
 
 也可以只选择其中一个或两个。通用引擎会逐个执行；某个 AI 失败不会阻止后面的 AI，最终任务会返回失败状态并把详情写入日志。
 
-v0.2 使用互斥配额策略：同一个 AI 只能选择“5 小时点火”或“仅周点火”。已有 5 小时点火时不会再创建重复的周任务；只有没有 5 小时机制或主动不使用 5 小时任务的 AI 才进入周任务。
+v0.3 使用互斥配额策略：同一个 AI 只能选择“5 小时点火”或“仅周点火”。已有 5 小时点火时不会再创建重复的周任务；只有没有 5 小时机制或主动不使用 5 小时任务的 AI 才进入周任务。默认 5 小时组为 Claude、Antigravity，周组为 Codex。
 
 ## 文件
 
@@ -222,3 +222,4 @@ pwsh -File .\tests\test-installer-v0.2.ps1
 
 - `v0.1`：Codex、Claude、Antigravity 通用点火引擎和独立周期安装器。
 - `v0.2`：互斥的 5 小时/仅周配额策略；周额度耗尽后的持久化冷却与恢复后重试。
+- `v0.3`：开箱即用轻量模型点火（Luna, Haiku, Flash）；默认分离 5 小时组（Claude, Antigravity）与周点火组（Codex）；支持智能起跑时间与精准周重置对齐；修复 Antigravity CLI 调用参数。

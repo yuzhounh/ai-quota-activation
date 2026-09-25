@@ -16,7 +16,7 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
-$scriptVersion = '0.2'
+$scriptVersion = '0.3'
 $supportedProviders = @('Codex', 'Claude', 'Antigravity')
 
 if ($ShowVersion) {

@@ -20,7 +20,7 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
-$scriptVersion = '0.2'
+$scriptVersion = '0.3'
 
 if ($ShowVersion) {
     Write-Output "AI Quota Activation $scriptVersion"
