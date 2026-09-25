@@ -2,30 +2,47 @@
   <img src="assets/ai-quota-activation-logo.png" alt="AI Quota Activation logo" width="220">
 </p>
 
-# AI Quota Activation v0.4
+# AI Quota Activation
 
-这是一个 Windows 通用 AI 配额点火器。它用一次极简、无工具、无文件修改的 CLI 请求，启动 Codex、Claude 或 Antigravity 的使用窗口，并可通过 Windows 任务计划程序执行 5 小时点火或每周点火。
+> Windows 通用 AI 配额点火与计划唤醒引擎，自动化激活 Codex、Claude、Antigravity 额度窗口与回睡管理。
+
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+[![Platform](https://img.shields.io/badge/Platform-Windows-lightgrey.svg)]()
+[![PowerShell](https://img.shields.io/badge/PowerShell-%3E%3D%207.4-blue.svg)]()
+
+AI Quota Activation 是一个专为 Windows 设计的通用 AI 配额点火器。它用一次极简、无工具、无文件修改的 CLI 沙箱请求，启动 Codex、Claude 或 Google Antigravity 的使用窗口，并可通过 Windows 任务计划程序执行 5 小时点火或每周定时点火。
 
 默认一次点火以下三个 CLI：
 
-- Codex CLI（`codex`）
-- Claude Code CLI（`claude`）
-- Google Antigravity CLI（`agy`）
+- **Codex CLI** (`codex`)
+- **Claude Code CLI** (`claude`)
+- **Google Antigravity CLI** (`agy`)
 
 也可以只选择其中一个或两个。通用引擎会逐个执行；某个 AI 失败不会阻止后面的 AI，最终任务会返回失败状态并把详情写入日志。
 
 v0.4 使用互斥配额策略：同一个 AI 只能选择“5 小时点火”或“仅周点火”。已有 5 小时点火时不会再创建重复的周任务；只有没有 5 小时机制或主动不使用 5 小时任务的 AI 才进入周任务。默认 5 小时组为 Claude、Antigravity，周组为 Codex。
 
-## 文件
+## 亮点特性 (Features)
+
+* **极简无副作用点火**: 采用一次极简、无工具调用、无文件修改的沙箱 CLI 请求，安全激活使用窗口。
+* **多模型与轻量化支持**: 默认适配轻量级模型（Codex `gpt-5.6-luna`、Claude `haiku`、Antigravity `gemini-3.8-flash-low`），最大化节约 Token 与配额消耗。
+* **互斥与智能重置调度**: 支持 5 小时周期点火与每周点火互斥策略，自动对齐周配额刷新时间并实现持久化冷却重试。
+* **智能唤醒与安全回睡**: 精确归因 Windows 定时唤醒事件与用户空闲状态，点火完成后自动回睡，避免额外电量消耗。
+* **故障隔离与全面审计**: 独立捕获各 CLI 状态与错误码，单个 AI 失败不影响后续激活，完整记录详细运维日志。
+
+## 目录结构 (Repository Structure)
 
 ```text
-assets/ai-quota-activation-logo.png # 项目 Logo
-ai-quota-activate.ps1           # CLI 检测、点火、日志、唤醒归因和安全回睡
-install-ai-quota-schedule.ps1   # 按互斥配额策略安装/更新 Windows 计划任务
-VERSION                         # 当前版本号
-tests/                          # 不请求真实模型、不注册真实任务的回归测试
-logs/                           # 手动运行时生成（已忽略）
-state/                          # 周额度冷却状态（已忽略）
+.
+├── assets/                         # 项目静态资源与 Logo
+│   └── ai-quota-activation-logo.png
+├── tests/                          # 回归测试套件（模拟 CLI 与任务计划）
+├── .gitignore                      # Git 忽略配置
+├── ai-quota-activate.ps1           # CLI 检测、点火、日志、唤醒归因和安全回睡
+├── install-ai-quota-schedule.ps1   # 按互斥配额策略安装/更新 Windows 计划任务
+├── LICENSE                         # 开源协议
+├── README.md                       # 项目说明文档
+└── VERSION                         # 当前版本号
 ```
 
 计划任务使用的脚本和日志会部署到：
@@ -229,3 +246,8 @@ pwsh -File .\tests\test-installer-v0.2.ps1
 - `v0.2`：互斥的 5 小时/仅周配额策略；周额度耗尽后的持久化冷却与恢复后重试。
 - `v0.3`：开箱即用轻量模型点火（Luna, Haiku, Flash）；默认分离 5 小时组（Claude, Antigravity）与周点火组（Codex）；支持智能起跑时间与精准周重置对齐；修复 Antigravity CLI 调用参数。
 - `v0.4`：加入项目 Logo，并在个人主页 Vibes 项目区展示。
+
+## 开源协议 (License)
+
+本项目遵循 [MIT](LICENSE) 开源协议。
+
