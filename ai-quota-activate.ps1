@@ -363,9 +363,7 @@ function Get-ActivationArguments {
         }
         'Antigravity' {
             $arguments = @(
-                '--print',
                 '--output-format', 'json',
-                '--mode', 'plan',
                 '--sandbox',
                 '--disable-slash-commands',
                 '--effort', 'low',
@@ -374,7 +372,7 @@ function Get-ActivationArguments {
             if ($AntigravityModel) {
                 $arguments += @('--model', $AntigravityModel)
             }
-            $arguments += $prompt
+            $arguments += "--print=$prompt"
             return $arguments
         }
     }

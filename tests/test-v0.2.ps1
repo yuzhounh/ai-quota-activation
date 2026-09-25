@@ -51,7 +51,19 @@ try {
         throw "Expected the fake CLI to run once, got $invocationCount invocation(s)."
     }
 
+    $antigravityDryRun = (& $engine `
+        -AI Antigravity `
+        -AntigravityPath $fixture `
+        -LogDirectory $logDirectory `
+        -StateDirectory $stateDirectory `
+        -DryRun `
+        -NoSleep *>&1 | Out-String)
+    if ($antigravityDryRun -notmatch '--print=' -or $antigravityDryRun -match '(?m)\s--mode\s') {
+        throw 'The Antigravity print-mode arguments are invalid.'
+    }
+
     Write-Host 'PASS: weekly quota cooldown was persisted and the second CLI request was skipped.' -ForegroundColor Green
+    Write-Host 'PASS: Antigravity uses an attached --print prompt without the ineffective --mode flag.' -ForegroundColor Green
 }
 finally {
     Remove-Item Env:AI_QUOTA_TEST_COUNTER -ErrorAction SilentlyContinue
