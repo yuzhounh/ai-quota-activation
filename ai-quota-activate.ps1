@@ -20,7 +20,7 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
-$scriptVersion = '0.3'
+$scriptVersion = '0.4'
 
 if ($ShowVersion) {
     Write-Output "AI Quota Activation $scriptVersion"
@@ -37,6 +37,7 @@ if ($PSVersionTable.PSEdition -ne 'Core' -or $PSVersionTable.PSVersion -lt [vers
 $supportedProviders = @('Codex', 'Claude', 'Antigravity')
 $providers = @(
     $AI -split '[,;\s]+' |
+        Where-Object { $_ } |
         ForEach-Object {
             $candidate = $_.Trim()
             $match = $supportedProviders | Where-Object {
@@ -250,7 +251,7 @@ function Find-QuotaResetTime {
 
     $isoMatch = [regex]::Match(
         $Text,
-        '(?<!\d)(?<value>\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?(?:Z|[+-]\d{2}:?\d{2})?)',
+        '\breset(?:s|ting)?(?:\s+at|\s+on|_at|_time)?\b["'']?\s*[:=]?\s*["'']?(?<value>\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?(?:Z|[+-]\d{2}:?\d{2})?)',
         [Text.RegularExpressions.RegexOptions]::IgnoreCase
     )
     if ($isoMatch.Success) {

@@ -16,5 +16,6 @@ if ($env:AI_QUOTA_TEST_COUNTER) {
     [IO.File]::WriteAllText($env:AI_QUOTA_TEST_COUNTER, [string]($count + 1))
 }
 
+Write-Output ('Request logged at {0:o}.' -f [DateTimeOffset]::Now)
 Write-Output 'Weekly quota exhausted. Usage resets at 2099-01-02T05:00:00+08:00.'
 exit 17

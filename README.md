@@ -5,7 +5,7 @@
 <h1 align="center">AI Quota Activation</h1>
 
 <p align="center">
-  <strong>Windows 通用 AI 配额点火与计划唤醒引擎，自动化激活 Codex、Claude、Antigravity 额度窗口与回睡管理</strong>
+  <strong>Windows AI CLI 定时调用工具，支持 Codex、Claude、Antigravity、计划唤醒与空闲回睡</strong>
 </p>
 
 <p align="center">
@@ -17,7 +17,7 @@
 </p>
 
 
-AI Quota Activation 是一个专为 Windows 设计的通用 AI 配额点火器。它用一次极简、无工具、无文件修改的 CLI 沙箱请求，启动 Codex、Claude 或 Google Antigravity 的使用窗口，并可通过 Windows 任务计划程序执行 5 小时点火或每周定时点火。
+AI Quota Activation 通过 Windows 任务计划程序，按预设时间向 Codex、Claude 或 Google Antigravity CLI 发起一次简短请求。脚本提供受限调用参数、失败日志、周限额冷却记录及空闲回睡逻辑；实际额度窗口、重置时间和模型可用性由服务端与账户决定，脚本不会增加额度或修改服务端限额。
 
 默认一次点火以下三个 CLI：
 
@@ -31,8 +31,8 @@ v0.4 使用互斥配额策略：同一个 AI 只能选择“5 小时点火”或
 
 ## 亮点特性 (Features)
 
-* **极简无副作用点火**: 采用一次极简、无工具调用、无文件修改的沙箱 CLI 请求，安全激活使用窗口。
-* **多模型与轻量化支持**: 默认适配轻量级模型（Codex `gpt-5.6-luna`、Claude `haiku`、Antigravity `gemini-3.8-flash-low`），最大化节约 Token 与配额消耗。
+* **简短的受限请求**: 提示词仅要求回复 `OK`，并为不同 CLI 配置工具、会话或沙箱限制；本地仍会写入运行日志和冷却状态。
+* **可配置模型**: 内置 Codex `gpt-5.6-luna`、Claude `haiku`、Antigravity `gemini-3.8-flash-low` 预设，也可通过参数替换。
 * **互斥与智能重置调度**: 支持 5 小时周期点火与每周点火互斥策略，自动对齐周配额刷新时间并实现持久化冷却重试。
 * **智能唤醒与安全回睡**: 精确归因 Windows 定时唤醒事件与用户空闲状态，点火完成后自动回睡，避免额外电量消耗。
 * **故障隔离与全面审计**: 独立捕获各 CLI 状态与错误码，单个 AI 失败不影响后续激活，完整记录详细运维日志。
@@ -58,13 +58,24 @@ v0.4 使用互斥配额策略：同一个 AI 只能选择“5 小时点火”或
 %LOCALAPPDATA%\AIQuotaActivation\
 ```
 
-## 前置要求
+## 快速上手 (Quick Start)
+
+### 前置依赖 (Prerequisites)
 
 1. Windows 10/11。
 2. PowerShell 7.4 或更高版本，命令为 `pwsh.exe`。
 3. 至少安装并登录准备点火的 AI CLI。
 
-检查默认三个 CLI：
+### 获取代码与检查环境
+
+```powershell
+git clone https://github.com/yuzhounh/ai-quota-activation.git
+cd ai-quota-activation
+```
+
+也可从 GitHub 的 **Code → Download ZIP** 下载并解压，然后在项目目录打开 PowerShell 7。
+
+检查默认三个 CLI（只检查可执行文件是否存在，不验证登录状态或可用额度）：
 
 ```powershell
 pwsh -File .\ai-quota-activate.ps1 -CheckOnly
@@ -92,9 +103,9 @@ npm install -g @anthropic-ai/claude-code
 irm https://antigravity.google/cli/install.ps1 | iex
 ```
 
-## 先做无消耗演练
+### 演练命令
 
-`-DryRun` 会完成 CLI 检测并显示将要执行的命令，但不会请求任何 AI，也不会让电脑睡眠：
+`-DryRun` 会完成 CLI 检测并显示将要执行的命令，不请求模型，也不会让电脑睡眠；仍可能创建本地日志和状态目录：
 
 ```powershell
 pwsh -File .\ai-quota-activate.ps1 -DryRun -NetworkWaitSeconds 0 -PostWaitSeconds 0
@@ -106,7 +117,7 @@ pwsh -File .\ai-quota-activate.ps1 -DryRun -NetworkWaitSeconds 0 -PostWaitSecond
 pwsh -File .\ai-quota-activate.ps1 -AI Codex,Antigravity -DryRun
 ```
 
-## 手动点火
+### 手动点火
 
 手动点火默认不会因为普通终端运行而误判为计划任务唤醒；加上 `-NoSleep` 可以明确禁止本次自动回睡：
 
@@ -122,9 +133,10 @@ pwsh -File .\ai-quota-activate.ps1 `
 
 ## 配置点火策略
 
-默认策略符合主流订阅与限额结构：
+脚本默认采用以下本地时间安排，请按自己的账户重置时间调整：
+
 - **5 小时点火组**（`Claude, Antigravity`）：每天在 `05:00`、`10:03`、`15:06`、`20:09` 本地时间点火。
-- **仅周点火组**（`Codex`）：每周五 `08:08` 点火一次（适用于周五 08:00 额度恢复的 GPT Pro 订阅，在恢复后稍候点火）。
+- **仅周点火组**（`Codex`）：每周五 `08:08` 点火一次。
 
 直接执行即可安装默认策略：
 
@@ -150,9 +162,9 @@ pwsh -File .\install-ai-quota-schedule.ps1 `
   -WeeklyTime 08:08
 ```
 
-周任务默认每周五 `08:08`（首次于 10 月 2 日 08:08 触发）。也可以显式传入具体日期时间，如 `-WeeklyTime '2026-10-02 08:08'`。如果服务显示的是固定周重置时间，建议把 `-WeeklyTime` 设在实际重置时间之后几分钟（避开额度刷新延迟）。
+只传入时刻时，周任务首次触发时间会自动选择安装当日之后（或当天尚未到达）的下一个匹配时刻。也可以显式传入具体日期时间，如 `-WeeklyTime '2026-10-02 08:08'`；此时星期由日期决定。请使用未来日期，并根据账户显示的重置时间设置任务。
 
-两个参数不能包含同一个 AI；安装器会拒绝重叠配置。省略某一组时，已存在的对应任务会被禁用，防止旧任务继续重复点火。
+两个参数不能包含同一个 AI；安装器会拒绝重叠配置。将某一组显式设为空字符串（如 `-WeeklyOnlyAI ''`）时，已存在的对应任务会被禁用；省略参数则使用默认分组。
 
 只验证 CLI 和策略而不注册任务：
 
@@ -166,10 +178,11 @@ pwsh -File .\install-ai-quota-schedule.ps1 -CheckOnly
 
 ## 模型选择
 
-点火引擎默认已内置各 AI 消耗最低的轻量级模型，最大程度节约配额与 token：
-- **Codex**: `gpt-5.6-luna`（ChatGPT 订阅支持的 Luna 轻量模型）
-- **Claude**: `haiku`（`claude-haiku-4-5` 轻量模型）
-- **Antigravity**: `gemini-3.8-flash-low`（Gemini 3.8 Flash 低推理开销模式）
+当前脚本的模型默认值如下。这些是可覆盖的配置，不代表对账户可用性、最低费用或最少配额消耗的保证；CLI 别名的实际解析由对应服务决定。
+
+- **Codex**: `gpt-5.6-luna`
+- **Claude**: `haiku`
+- **Antigravity**: `gemini-3.8-flash-low`
 
 如有特殊需要，仍可在手动点火或安装任务时显式指定不同模型进行覆盖：
 
@@ -235,6 +248,7 @@ Remove-Item -LiteralPath "$env:LOCALAPPDATA\AIQuotaActivation" -Recurse -Force
 ```powershell
 pwsh -File .\tests\test-v0.2.ps1
 pwsh -File .\tests\test-installer-v0.2.ps1
+pwsh -File .\tests\test-reset-time.ps1
 ```
 
 ## 扩展新的 AI
@@ -243,7 +257,7 @@ pwsh -File .\tests\test-installer-v0.2.ps1
 
 1. `$supportedProviders`：允许的名称。
 2. `Get-ProviderMetadata`：命令名、常见路径和安装提示。
-3. `Get-ActivationArguments`：该 CLI 的无副作用、非交互调用参数。
+3. `Get-ActivationArguments`：该 CLI 的受限、非交互调用参数。
 
 唤醒、日志、失败隔离和自动回睡逻辑无需复制。
 

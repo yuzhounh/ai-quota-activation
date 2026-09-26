@@ -16,7 +16,7 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
-$scriptVersion = '0.3'
+$scriptVersion = '0.4'
 $supportedProviders = @('Codex', 'Claude', 'Antigravity')
 
 if ($ShowVersion) {
@@ -139,7 +139,7 @@ foreach ($entry in @(
     @{ Name = 'AntigravityPath'; Value = $AntigravityPath }
 )) {
     if ($entry.Value) {
-        $checkParameters[$entry.Name] = $entry.Value
+        $checkParameters[$entry.Name] = (Resolve-Path -LiteralPath $entry.Value).Path
     }
 }
 
@@ -211,9 +211,9 @@ function New-ActivationTaskDefinition {
         '-TaskName', (ConvertTo-TaskArgument $taskName)
     )
     foreach ($entry in @(
-        @{ Name = '-CodexPath'; Value = $CodexPath },
-        @{ Name = '-ClaudePath'; Value = $ClaudePath },
-        @{ Name = '-AntigravityPath'; Value = $AntigravityPath },
+        @{ Name = '-CodexPath'; Value = $checkParameters['CodexPath'] },
+        @{ Name = '-ClaudePath'; Value = $checkParameters['ClaudePath'] },
+        @{ Name = '-AntigravityPath'; Value = $checkParameters['AntigravityPath'] },
         @{ Name = '-CodexModel'; Value = $CodexModel },
         @{ Name = '-ClaudeModel'; Value = $ClaudeModel },
         @{ Name = '-AntigravityModel'; Value = $AntigravityModel }
