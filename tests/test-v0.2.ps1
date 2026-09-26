@@ -1,21 +1,20 @@
 $ErrorActionPreference = 'Stop'
+. (Join-Path $PSScriptRoot 'test-helpers.ps1')
 
 $projectRoot = Split-Path -Parent $PSScriptRoot
 $engine = Join-Path $projectRoot 'ai-quota-activate.ps1'
-$fixture = Join-Path $PSScriptRoot 'fixtures\weekly-limit.ps1'
-$testRoot = Join-Path $PSScriptRoot '.tmp'
+$fixture = (Resolve-Path -LiteralPath (Join-Path $PSScriptRoot 'fixtures\weekly-limit.ps1')).Path
+$testRoot = Join-Path $PSScriptRoot '.tmp\engine'
 $logDirectory = Join-Path $testRoot 'logs'
 $stateDirectory = Join-Path $testRoot 'state'
 $counterPath = Join-Path $testRoot 'invocations.txt'
 
-if (Test-Path -LiteralPath $testRoot) {
-    Remove-Item -LiteralPath $testRoot -Recurse -Force
-}
+Remove-AIQuotaTestDirectory -Path $testRoot
 New-Item -ItemType Directory -Force -Path $testRoot | Out-Null
 $env:AI_QUOTA_TEST_COUNTER = $counterPath
 
 $parameters = @{
-    AI                 = 'Codex'
+    AI                 = ' Codex, codex; '
     CodexPath          = $fixture
     LogDirectory       = $logDirectory
     StateDirectory     = $stateDirectory
@@ -36,7 +35,8 @@ try {
         throw 'The weekly quota state file was not created.'
     }
     $state = Get-Content -LiteralPath $statePath -Raw | ConvertFrom-Json
-    if ($state.status -ne 'WeeklyQuotaExhausted' -or [DateTimeOffset]$state.blockedUntil -le [DateTimeOffset]::Now) {
+    if ($state.status -ne 'WeeklyQuotaExhausted' -or
+        [DateTimeOffset]$state.blockedUntil -ne [DateTimeOffset]'2099-01-02T05:00:00+08:00') {
         throw 'The weekly quota state file is invalid.'
     }
 
@@ -63,11 +63,10 @@ try {
     }
 
     Write-Host 'PASS: weekly quota cooldown was persisted and the second CLI request was skipped.' -ForegroundColor Green
+    Write-Host 'PASS: provider whitespace, duplicate names and trailing delimiters are accepted.' -ForegroundColor Green
     Write-Host 'PASS: Antigravity uses an attached --print prompt without the ineffective --mode flag.' -ForegroundColor Green
 }
 finally {
     Remove-Item Env:AI_QUOTA_TEST_COUNTER -ErrorAction SilentlyContinue
-    if (Test-Path -LiteralPath $testRoot) {
-        Remove-Item -LiteralPath $testRoot -Recurse -Force
-    }
+    Remove-AIQuotaTestDirectory -Path $testRoot
 }

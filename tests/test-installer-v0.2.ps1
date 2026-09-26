@@ -1,7 +1,10 @@
 $ErrorActionPreference = 'Stop'
+. (Join-Path $PSScriptRoot 'test-helpers.ps1')
 
 $projectRoot = Split-Path -Parent $PSScriptRoot
 $installer = Join-Path $projectRoot 'install-ai-quota-schedule.ps1'
+$fixture = (Resolve-Path -LiteralPath (Join-Path $PSScriptRoot 'fixtures\weekly-limit.ps1')).Path
+$fixturePaths = @{ CodexPath = $fixture; ClaudePath = $fixture; AntigravityPath = $fixture }
 $testRoot = Join-Path $PSScriptRoot '.tmp\installer'
 $originalLocalAppData = $env:LOCALAPPDATA
 $global:AIQuotaTestRegistrations = [Collections.Generic.List[object]]::new()
@@ -73,13 +76,11 @@ function powercfg {
 }
 
 try {
-    if (Test-Path -LiteralPath $testRoot) {
-        Remove-Item -LiteralPath $testRoot -Recurse -Force
-    }
+    Remove-AIQuotaTestDirectory -Path $testRoot
     New-Item -ItemType Directory -Force -Path $testRoot | Out-Null
     $env:LOCALAPPDATA = $testRoot
 
-    & $installer -FiveHourAI Codex,Claude -WeeklyOnlyAI Antigravity
+    & $installer -FiveHourAI Codex,Claude -WeeklyOnlyAI Antigravity @fixturePaths
 
     if ($global:AIQuotaTestRegistrations.Count -ne 2) {
         throw "Expected two scheduled tasks, got $($global:AIQuotaTestRegistrations.Count)."
@@ -98,7 +99,7 @@ try {
     }
 
     $global:AIQuotaTestRegistrations.Clear()
-    & $installer
+    & $installer @fixturePaths
     if ($global:AIQuotaTestRegistrations.Count -ne 2) {
         throw "Expected two scheduled tasks by default, got $($global:AIQuotaTestRegistrations.Count)."
     }
@@ -116,20 +117,40 @@ try {
         TaskName = 'AI Quota Weekly Activation'
         State    = 'Ready'
     }
-    & $installer -FiveHourAI Codex -WeeklyOnlyAI ''
+    & $installer -FiveHourAI Codex -WeeklyOnlyAI '' @fixturePaths
     if ($global:AIQuotaTestRegistrations.Count -ne 1 -or
         $global:AIQuotaTestDisabledTasks -notcontains 'AI Quota Weekly Activation') {
         throw 'An obsolete weekly task was not disabled when only five-hour activation was selected.'
     }
 
+    $global:AIQuotaTestRegistrations.Clear()
+    Push-Location -LiteralPath $projectRoot
+    try {
+        & $installer -CodexPath '.\tests\fixtures\weekly-limit.ps1' `
+            -ClaudePath '.\tests\fixtures\weekly-limit.ps1' `
+            -AntigravityPath '.\tests\fixtures\weekly-limit.ps1'
+    }
+    finally {
+        Pop-Location
+    }
+    if ($global:AIQuotaTestRegistrations.Count -ne 2) {
+        throw 'Expected two tasks for the relative CLI path test.'
+    }
+    foreach ($task in $global:AIQuotaTestRegistrations) {
+        foreach ($provider in @('Codex', 'Claude', 'Antigravity')) {
+            if (-not $task.Action.Argument.Contains("-$($provider)Path `"$fixture`"")) {
+                throw "The $provider CLI path was not persisted as an absolute path."
+            }
+        }
+    }
+
     Write-Host 'PASS: mutually exclusive task definitions were registered and an obsolete weekly task was disabled.' -ForegroundColor Green
+    Write-Host 'PASS: relative CLI paths are stored as absolute paths for the task working directory.' -ForegroundColor Green
 }
 finally {
     $env:LOCALAPPDATA = $originalLocalAppData
     Remove-Variable -Name AIQuotaTestRegistrations -Scope Global -ErrorAction SilentlyContinue
     Remove-Variable -Name AIQuotaTestDisabledTasks -Scope Global -ErrorAction SilentlyContinue
     Remove-Variable -Name AIQuotaTestExistingTasks -Scope Global -ErrorAction SilentlyContinue
-    if (Test-Path -LiteralPath $testRoot) {
-        Remove-Item -LiteralPath $testRoot -Recurse -Force
-    }
+    Remove-AIQuotaTestDirectory -Path $testRoot
 }
