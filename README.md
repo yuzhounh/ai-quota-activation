@@ -1,21 +1,21 @@
 <p align="center">
-  <img src="assets/ai-quota-activation-logo.png" alt="AI Quota Activation logo" width="220">
+  <img src="assets/ai-quota-activation-logo.png" width="112" alt="AI Quota Activation logo">
 </p>
 
 <h1 align="center">AI Quota Activation</h1>
 
+<p align="center"><strong>Windows AI CLI 定时调用，支持计划唤醒与空闲回睡。</strong></p>
+
 <p align="center">
-  <strong>Windows AI CLI 定时调用工具，支持 Codex、Claude、Antigravity、计划唤醒与空闲回睡</strong>
+  <a href="https://github.com/yuzhounh/ai-quota-activation/releases/latest"><img src="https://img.shields.io/github/v/release/yuzhounh/ai-quota-activation?style=flat&amp;color=0969da&amp;label=Release" alt="Latest stable release"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-f59e0b?style=flat" alt="License: MIT"></a>
+  <img src="https://img.shields.io/badge/Platform-Windows-0078d4?style=flat" alt="Platform: Windows">
+  <img src="https://img.shields.io/badge/PowerShell-Windows-5391fe?style=flat" alt="PowerShell: Windows">
 </p>
 
 <p align="center">
-  <a href="VERSION"><img src="https://img.shields.io/badge/version-v0.4-0969da.svg" alt="Version"></a>
-  <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-f59e0b.svg" alt="License"></a>
-  <img src="https://img.shields.io/badge/Platform-Windows-0078D4.svg?logo=windows&logoColor=white" alt="Platform">
-  <img src="https://img.shields.io/badge/PowerShell-%3E%3D%207.4-5391FE.svg?logo=powershell&logoColor=white" alt="PowerShell">
-  <img src="https://img.shields.io/badge/Schedule-5h%20%7C%20Weekly-ff6a00.svg" alt="Schedule Policy">
+  <a href="https://github.com/yuzhounh/ai-quota-activation/releases/latest">下载发布版</a> · <a href="#快速开始">快速开始</a> · <a href="LICENSE">开源协议</a>
 </p>
-
 
 AI Quota Activation 通过 Windows 任务计划程序，按预设时间向 Codex、Claude 或 Google Antigravity CLI 发起一次简短请求。脚本提供受限调用参数、失败日志、周限额冷却记录及空闲回睡逻辑；实际额度窗口、重置时间和模型可用性由服务端与账户决定，脚本不会增加额度或修改服务端限额。
 
@@ -29,7 +29,7 @@ AI Quota Activation 通过 Windows 任务计划程序，按预设时间向 Codex
 
 v0.4 使用互斥配额策略：同一个 AI 只能选择“5 小时点火”或“仅周点火”。已有 5 小时点火时不会再创建重复的周任务；只有没有 5 小时机制或主动不使用 5 小时任务的 AI 才进入周任务。默认 5 小时组为 Claude、Antigravity，周组为 Codex。
 
-## 亮点特性 (Features)
+## 功能特点
 
 * **简短的受限请求**: 提示词仅要求回复 `OK`，并为不同 CLI 配置工具、会话或沙箱限制；本地仍会写入运行日志和冷却状态。
 * **可配置模型**: 内置 Codex `gpt-5.6-luna`、Claude `haiku`、Antigravity `gemini-3.8-flash-low` 预设，也可通过参数替换。
@@ -58,7 +58,7 @@ v0.4 使用互斥配额策略：同一个 AI 只能选择“5 小时点火”或
 %LOCALAPPDATA%\AIQuotaActivation\
 ```
 
-## 快速上手 (Quick Start)
+## 快速开始
 
 ### 前置依赖 (Prerequisites)
 
@@ -268,7 +268,7 @@ pwsh -File .\tests\test-reset-time.ps1
 - `v0.3`：开箱即用轻量模型点火（Luna, Haiku, Flash）；默认分离 5 小时组（Claude, Antigravity）与周点火组（Codex）；支持智能起跑时间与精准周重置对齐；修复 Antigravity CLI 调用参数。
 - `v0.4`：加入项目 Logo，并在个人主页 Vibes 项目区展示。
 
-## 开源协议 (License)
+## 开源协议
 
 本项目遵循 [MIT](LICENSE) 开源协议。
 
