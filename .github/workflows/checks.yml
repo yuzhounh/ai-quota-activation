@@ -1,0 +1,16 @@
+name: Offline activation checks
+on: [push, pull_request, workflow_dispatch]
+permissions:
+  contents: read
+jobs:
+  check:
+    runs-on: windows-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - run: ./tests/test-reset-time.ps1
+        shell: pwsh
+      - run: ./tests/test-v0.2.ps1
+        shell: pwsh
+      - run: ./tests/test-installer-v0.2.ps1
+        shell: pwsh
